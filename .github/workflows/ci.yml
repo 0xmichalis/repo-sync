@@ -46,8 +46,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-target-
 
-      - name: Run tests
-        run: cargo +stable test --verbose
+      - name: Run unit tests
+        run: cargo +stable test --lib --verbose
+
+      - name: Run sync integration tests
+        run: cargo +stable test --test sync_integration --verbose
 
   fmt:
     name: Format
