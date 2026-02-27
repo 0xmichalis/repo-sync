@@ -177,7 +177,9 @@ fn clean_untracked(repo: &Repository) -> Result<()> {
     let statuses = repo
         .statuses(Some(&mut status_options))
         .context("git status failed during cleanup")?;
-    let workdir = repo.workdir().ok_or_else(|| anyhow!("repo has no workdir"))?;
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| anyhow!("repo has no workdir"))?;
 
     for entry in statuses.iter() {
         let status = entry.status();

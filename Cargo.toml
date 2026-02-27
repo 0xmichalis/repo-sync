@@ -20,5 +20,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "user-hooks"] }
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

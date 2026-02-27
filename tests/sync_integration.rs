@@ -8,11 +8,23 @@ use tempfile::tempdir;
 use tokio::sync::RwLock;
 
 fn run_git(cwd: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("run git");
+    let mut cmd = Command::new("git");
+    cmd.args(args).current_dir(cwd);
+    // When tests run under git hooks, inherited GIT_* vars can make commands
+    // target the outer repository instead of this temp repository.
+    for key in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_PREFIX",
+        "GIT_CEILING_DIRECTORIES",
+    ] {
+        cmd.env_remove(key);
+    }
+    let output = cmd.output().expect("run git");
     assert!(
         output.status.success(),
         "git {:?} failed: {}",
@@ -32,6 +44,7 @@ async fn sync_once_updates_mirror_when_source_changes() {
     run_git(&source, &["checkout", "-b", "main"]);
     run_git(&source, &["config", "user.email", "bot@example.com"]);
     run_git(&source, &["config", "user.name", "Bot"]);
+    run_git(&source, &["config", "commit.gpgsign", "false"]);
 
     std::fs::write(source.join("collections.json"), "{\"version\":1}").expect("write v1");
     run_git(&source, &["add", "."]);
@@ -89,6 +102,7 @@ async fn sync_once_removes_untracked_files_and_dirs_from_mirror() {
     run_git(&source, &["checkout", "-b", "main"]);
     run_git(&source, &["config", "user.email", "bot@example.com"]);
     run_git(&source, &["config", "user.name", "Bot"]);
+    run_git(&source, &["config", "commit.gpgsign", "false"]);
 
     std::fs::create_dir_all(source.join("nested")).expect("create source nested dir");
     std::fs::write(source.join("collections.json"), "{\"version\":1}").expect("write v1");
@@ -124,15 +138,16 @@ async fn sync_once_removes_untracked_files_and_dirs_from_mirror() {
         .await
         .expect("second sync should work");
 
-    assert_eq!(untracked_file.exists(), false);
-    assert_eq!(untracked_dir.exists(), false);
-    assert_eq!(untracked_nested_file.exists(), false);
+    assert!(!untracked_file.exists());
+    assert!(!untracked_dir.exists());
+    assert!(!untracked_nested_file.exists());
     assert_eq!(
         std::fs::read_to_string(mirror.join("collections.json")).expect("read mirrored file"),
         "{\"version\":1}"
     );
     assert_eq!(
-        std::fs::read_to_string(mirror.join("nested/tracked.json")).expect("read mirrored nested file"),
+        std::fs::read_to_string(mirror.join("nested/tracked.json"))
+            .expect("read mirrored nested file"),
         "{\"tracked\":true}"
     );
 }
